@@ -3,6 +3,7 @@
 # dependencies = [
 #     "pandas==2.2.3",
 #     "pyyaml==6.0.2",
+#     "tabulate",
 # ]
 # ///
 
