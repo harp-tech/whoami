@@ -39,3 +39,4 @@
 |     1403 | cuTTLefish              | AllenNeuralDynamics | AllenNeuralDynamics | https://github.com/AllenNeuralDynamics/harp.device.cuttlefish         | https://github.com/AllenNeuralDynamics/harp.device.cuttlefish         |
 |     1404 | WhiteRabbit             | AllenNeuralDynamics | AllenNeuralDynamics | https://github.com/AllenNeuralDynamics/harp.device.white-rabbit       | https://github.com/AllenNeuralDynamics/harp.device.white-rabbit       |
 |     1405 | EnvironmentSensor       | AllenNeuralDynamics | AllenNeuralDynamics | https://github.com/AllenNeuralDynamics/harp.device.environment-sensor | https://github.com/AllenNeuralDynamics/harp.device.environment-sensor |
+|     1407 | cuTTLefishFip           | AllenNeuralDynamics | AllenNeuralDynamics | https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip     | https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip     |
