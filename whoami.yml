@@ -3,14 +3,19 @@
 # yaml-language-server: $schema=./whoami.json
 
 devices:
+  123: &harptechdevice
+    name: Hobgoblin
+    authors: harp-tech
+    copyright: harp-tech
+    repositoryUrl: https://github.com/harp-tech/device.hobgoblin
+    projectUrl: https://github.com/harp-tech/device.hobgoblin
   256:
     name: USBHub
   1024:
     name: Poke
-  1040: &harptechdevice
+  1040:
+    <<: *harptechdevice
     name: MultiPwmGenerator
-    authors: harp-tech
-    copyright: harp-tech
     repositoryUrl: https://github.com/harp-tech/device.multipwm
     projectUrl: https://github.com/harp-tech/device.multipwm
   1056:
