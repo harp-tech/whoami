@@ -124,6 +124,12 @@ devices:
     name: SoundCard
     repositoryUrl: https://github.com/harp-tech/device.soundcard
     projectUrl: https://github.com/harp-tech/device.soundcard
+  1282:
+    name: CurrentDriver
+    authors: ChampalimaudFoundation
+    copyright: ChampalimaudFoundation
+    repositoryUrl: https://github.com/fchampalimaud/device.currentdriver
+    projectUrl: https://github.com/fchampalimaud/device.currentdriver
   1296:
     <<: *harptechdevice
     name: SyringePump
