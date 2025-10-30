@@ -129,6 +129,12 @@ devices:
     name: SyringePump
     repositoryUrl: https://github.com/harp-tech/device.syringepump
     projectUrl: https://github.com/harp-tech/device.syringepump
+  1298:
+    name: LaserDriverController
+    authors: ChampalimaudFoundation
+    copyright: ChampalimaudFoundation
+    repositoryUrl: https://github.com/fchampalimaud/device.laserdrivercontroller
+    projectUrl: https://github.com/fchampalimaud/device.laserdrivercontroller
   2064:
     name: NeurophotometricsFP3002
     copyright: Neurophotometrics
