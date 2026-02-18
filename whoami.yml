@@ -114,6 +114,11 @@ devices:
     projectUrl: https://github.com/harp-tech/device.analoginput
   1248:
     <<: *harptechdevice
+    name: AudioSwitch
+    repositoryUrl: https://github.com/harp-tech/device.audioswitch
+    projectUrl: https://github.com/harp-tech/device.audioswitch
+  1264:
+    <<: *harptechdevice
     name: RgbArray
     repositoryUrl: https://github.com/harp-tech/device.rgbarray
     projectUrl: https://github.com/harp-tech/device.rgbarray
