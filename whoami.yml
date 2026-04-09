@@ -209,3 +209,9 @@ devices:
     copyright: AllenNeuralDynamics
     repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
     projectUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
+  1410:
+    name: deLuxDriver
+    authors: AllenNeuralDynamics
+    copyright: AllenNeuralDynamics
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver     
