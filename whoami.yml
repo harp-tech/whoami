@@ -192,3 +192,10 @@ devices:
     copyright: AllenNeuralDynamics
     repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
     projectUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
+  1409:
+    name: DelphiController
+    authors: AllenNeuralDynamics
+    copyright: AllenNeuralDynamics
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.delphi-controller
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.delphi-controller
+
