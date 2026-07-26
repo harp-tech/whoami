@@ -1,9 +1,9 @@
 # /// script
 # requires-python = ">=3.11"
 # dependencies = [
-#     "pandas==2.2.3",
-#     "pyyaml==6.0.2",
-#     "tabulate",
+#     "pandas==3.0.5",
+#     "pyyaml==6.0.3",
+#     "tabulate==0.10.0",
 # ]
 # ///
 
@@ -18,6 +18,7 @@ def main(argv):
     d = pd.DataFrame.from_dict(yml["devices"], orient="index")
     d.index.names = ["WhoAmI"]
     d = d.fillna("")
+    d = d.sort_index()
     d.to_markdown("whoami.md")
 
 
