@@ -44,4 +44,4 @@
 |     2064 | NeurophotometricsFP3002 |                        | Neurophotometrics      | https://github.com/neurophotometrics/neurophotometrics                | https://github.com/neurophotometrics/neurophotometrics                |
 |     2080 | Ibl_behavior_control    | harp-tech              | harp-tech              | https://github.com/harp-tech/IBL_behavior_control                     | https://github.com/harp-tech/IBL_behavior_control                     |
 |     2094 | RfidReader              | harp-tech              | harp-tech              | https://github.com/harp-tech/device.rfidreader                        | https://github.com/harp-tech/device.rfidreader                        |
-|     2110 | Pluma                   | NeuroGEARS             | EmotionalCities        | https://github.com/emotional-cities/pluma                             | https://github.com/emotional-cities/pluma                             |
+|     2110 | Pluma                   | NeuroGEARS             | NeuroGEARS             | https://github.com/emotional-cities/pluma                             | https://github.com/emotional-cities/pluma                             |
