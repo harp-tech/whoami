@@ -219,3 +219,8 @@ devices:
     name: deLuxDriver
     repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver
     projectUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver     
+  1411:
+    <<: *aind
+    name: Quac
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.quac
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.quac   
