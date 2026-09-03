@@ -139,6 +139,11 @@ devices:
     projectUrl: https://github.com/harp-tech/device.rgbarray
   1200:
     name: FlyPad
+  1201:
+    <<: *champalimaud
+    name: FlypadController
+    repositoryUrl: https://github.com/fchampalimaud/device.flypad
+    projectUrl: https://github.com/fchampalimaud/device.flypad
   1280:
     <<: *harptech
     name: SoundCard
