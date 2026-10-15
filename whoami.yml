@@ -19,6 +19,9 @@ owners:
     copyright: Neurophotometrics
   oeps: &oeps
     authors: OEPS
+  swc: &swc
+    authors: SainsburyWellcomeCentre
+    copyright: SainsburyWellcomeCentre
 
 devices:
   123:
@@ -224,3 +227,8 @@ devices:
     name: Quac
     repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.quac
     projectUrl: https://github.com/AllenNeuralDynamics/harp.device.quac   
+  3002:
+    <<: *swc
+    name: VertiGate
+    repositoryUrl: https://github.com/SainsburyWellcomeCentre/aeon_vertigate
+    projectUrl: https://github.com/SainsburyWellcomeCentre/aeon_vertigate
