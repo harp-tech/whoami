@@ -1,5 +1,5 @@
 
-name: "Regenerate WhoAmI table"
+name: "Publish the WhoAmI registry"
 
 on:
   workflow_dispatch:
@@ -7,9 +7,16 @@ on:
   push:
     paths:
       - 'whoami.yml'
+      - 'docs/**'
+      - '.config/dotnet-tools.json'
+      - '.github/workflows/registry.yml'
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
-  build:
+  build-documentation:
     runs-on: ubuntu-latest
     permissions:
       # Needed to push changes
@@ -17,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          submodules: recursive
 
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
@@ -33,6 +42,18 @@ jobs:
         run: |
           cat whoami.md >> $GITHUB_STEP_SUMMARY
 
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.x
+
+      - name: Set up .NET tools
+        run: dotnet tool restore
+
+      - name: Build documentation
+        id: build-documentation
+        run: dotnet docfx docs/docfx.json
+
       - name: Commit changes
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: |
@@ -45,3 +66,24 @@ jobs:
           else
             echo "No changes to commit."
           fi
+
+      - name: Collect documentation website artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/_site
+
+  publish-documentation:
+    needs: build-documentation
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      # Both required by actions/deploy-pages
+      pages: write
+      id-token: write
+    environment:
+      name: documentation-website
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: publish
+        uses: actions/deploy-pages@v5
