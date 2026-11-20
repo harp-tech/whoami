@@ -6,4 +6,4 @@ Every Harp device reports its device class as a `WhoAmI` identifier. Identifiers
 
 The registry is published beside this page as plain files, so a code generator or an analysis script can read https://harp-tech.org/whoami/whoami.yml and validate it against the JSON schema at https://harp-tech.org/whoami/whoami.json.
 
-[!include[whoami](../whoami.md)]
+[!include[whoami](../artifacts/docs/whoami.md)]

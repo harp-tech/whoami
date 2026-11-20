@@ -1,6 +1,6 @@
 # `WhoAmI`
 
-This repository serves as a registry for unique identifiers for devices using the Harp Protocol.
+This repository serves as a registry for unique identifiers for devices using the Harp Protocol. The registry is published at [harp-tech.org/whoami](https://harp-tech.org/whoami), where the full table of reserved identifiers is rendered from `whoami.yml`.
 
 ## Reserving a `WhoAmI` Identifier
 
