@@ -27,10 +27,6 @@ jobs:
         run: |
           uv run .github/workflows/gen-whoami-table.py ./whoami.yml ./artifacts/docs/whoami.md
 
-      - name: Output generated table to actions summary
-        run: |
-          cat artifacts/docs/whoami.md >> $GITHUB_STEP_SUMMARY
-
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:

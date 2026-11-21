@@ -1,1 +1,16 @@
 @import "bonsai.css";
+
+article table {
+    display: block;
+    width: fit-content;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+article table a.external[href]::after {
+    display: none;
+}
+
+article table td a {
+    white-space: nowrap;
+}
