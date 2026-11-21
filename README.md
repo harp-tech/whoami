@@ -25,3 +25,15 @@ devices:
 ```
 
 An owner key identifies a combination of `authors` and `copyright` rather than an organization, so a device copyrighted to a different party than its authors needs its own key. If your combination is not listed, add it to `owners` in the same Pull Request, keeping the entries in alphabetical order. Do not set `authors` or `copyright` directly on a device.
+
+## Declaring a device app
+
+A device declares the app sanctioned by its maintainers in an optional `app` section:
+
+```yaml
+    app:
+      type: dotnetTool
+      package: Harp.Behavior.App
+```
+
+The `type` states the kind of app. In this case `dotnetTool` is an app published as a .NET tool and resolved from nuget.org, and `package` is the package identifier.

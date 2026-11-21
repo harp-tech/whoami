@@ -107,6 +107,9 @@ devices:
     name: Behavior
     repositoryUrl: https://github.com/harp-tech/device.behavior
     projectUrl: https://github.com/harp-tech/device.behavior
+    app:
+      type: dotnetTool
+      package: Harp.Behavior.App
   1224:
     <<: *neurogears
     name: VestibularH1
