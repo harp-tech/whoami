@@ -4,7 +4,14 @@ This repository serves as a registry for unique identifiers for devices using th
 
 ## Reserving a `WhoAmI` identifier
 
-To reserve a `WhoAmI` please submit a Pull Request with the desired identifier to the `whoami.yml` file in the root of this repository, along with a description of the device. Each new entry must declare an owner and a public GitHub repository with a `device.yml` at its root. The `whoAmI` and device name declared in that file must match the entry, and the name must be in PascalCase. These requirements are checked automatically on every Pull Request.
+To reserve a `WhoAmI` please submit a Pull Request adding the device to the `whoami.yml` file in the root of this repository, along with a description of the device. Each new entry must:
+
+- Use an identifier from 100 to 65535 that is not already reserved, keeping the devices sorted by `WhoAmI`
+- Declare an owner, as described in the next section
+- Have a PascalCase name that no other device uses
+- Declare a public GitHub repository with a `device.yml` at its root, whose `whoAmI` and name match the entry
+
+These requirements are checked automatically on every Pull Request.
 
 ## Declaring device ownership
 
