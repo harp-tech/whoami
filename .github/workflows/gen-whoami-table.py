@@ -7,12 +7,15 @@
 # ]
 # ///
 
+import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from html import escape
+from http import HTTPStatus
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -26,7 +29,7 @@ REPOSITORY_FILES = {
     "device": ("device.yml",),
     "license": ("LICENSE", "LICENSE.md", "LICENSE.txt"),
 }
-GONE = {404, 410}
+GRAPHQL_URL = "https://api.github.com/graphql"
 HEADERS = {"User-Agent": "whoami-link-check"}
 TIMEOUT = 20
 
@@ -38,6 +41,14 @@ def warn(message):
         print(f"warning: {message}", file=sys.stderr)
 
 
+def fail(message):
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::error::{message}")
+    else:
+        print(f"error: {message}", file=sys.stderr)
+    sys.exit(1)
+
+
 def probe(url):
     for method in ("HEAD", "GET"):
         request = urllib.request.Request(url, method=method, headers=HEADERS)
@@ -47,7 +58,7 @@ def probe(url):
         except urllib.error.HTTPError as error:
             if method == "HEAD":
                 continue
-            return "gone" if error.code in GONE else f"HTTP {error.code}"
+            return "missing" if error.code in (HTTPStatus.NOT_FOUND, HTTPStatus.GONE) else f"HTTP {error.code}"
         except (urllib.error.URLError, TimeoutError) as error:
             return str(getattr(error, "reason", error))
     return "unknown"
@@ -57,11 +68,12 @@ def check_links(urls):
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = dict(zip(urls, pool.map(probe, urls)))
     for url, result in sorted(results.items()):
-        if result == "gone":
-            warn(f"{url} no longer resolves and is left out of the table")
-        elif result != "ok":
-            warn(f"{url} could not be checked ({result}) and is kept")
-    return {url for url, result in results.items() if result != "gone"}
+        if result == "missing":
+            warn(f"{url} does not resolve and is left out of the table")
+    unchecked = [f"{url} ({result})" for url, result in sorted(results.items()) if result not in ("ok", "missing")]
+    if unchecked:
+        fail(f"links could not be checked: {', '.join(unchecked)}")
+    return {url for url, result in results.items() if result == "ok"}
 
 
 def github_path(repository):
@@ -69,21 +81,75 @@ def github_path(repository):
     return url.path.strip("/") if url.hostname == "github.com" else None
 
 
-def find_repository_files(repositories):
-    candidates = {
-        (repository, kind, name): f"https://raw.githubusercontent.com/{github_path(repository)}/HEAD/{name}"
-        for repository in repositories
-        if github_path(repository)
-        for kind, names in REPOSITORY_FILES.items()
-        for name in names
-    }
-    with ThreadPoolExecutor(max_workers=8) as pool:
-        results = dict(zip(candidates, pool.map(probe, candidates.values())))
-    files = {}
-    for (repository, kind, name), result in results.items():
-        if result == "ok":
-            files.setdefault((repository, kind), f"{repository.rstrip('/')}/blob/HEAD/{name}")
-    return files
+def github_token():
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        return token
+    try:
+        result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout.strip() or None
+
+
+def query_repositories(repositories, token):
+    names = [name for candidates in REPOSITORY_FILES.values() for name in candidates]
+    fields = "isPrivate url licenseInfo { spdxId name } " + " ".join(
+        f'f{i}: object(expression: "HEAD:{name}") {{ __typename }}' for i, name in enumerate(names)
+    )
+    variables, declarations, selections = {}, [], []
+    for i, repository in enumerate(repositories):
+        variables[f"owner{i}"], variables[f"name{i}"] = github_path(repository).split("/", 1)
+        declarations.append(f"$owner{i}: String!, $name{i}: String!")
+        selections.append(f"r{i}: repository(owner: $owner{i}, name: $name{i}) {{ {fields} }}")
+    query = f"query({', '.join(declarations)}) {{ {' '.join(selections)} }}"
+    request = urllib.request.Request(
+        GRAPHQL_URL,
+        data=json.dumps({"query": query, "variables": variables}).encode(),
+        headers={**HEADERS, "Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        result = json.load(response)
+    for error in result.get("errors", []):
+        if error.get("type") != "NOT_FOUND":
+            raise RuntimeError(error.get("message"))
+    data = result.get("data") or {}
+    found = {}
+    for i, repository in enumerate(repositories):
+        entry = data.get(f"r{i}")
+        if entry:
+            entry["files"] = {name for j, name in enumerate(names) if entry[f"f{j}"]}
+        found[repository] = entry
+    return found
+
+
+def check_repositories(repositories):
+    token = github_token()
+    if not token:
+        fail("repositories cannot be checked without a GitHub token, so set GITHUB_TOKEN or sign in with the GitHub CLI")
+    try:
+        results = query_repositories(repositories, token)
+    except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
+        fail(f"repositories could not be checked ({getattr(error, 'reason', error)})")
+    alive, files = set(), {}
+    for repository, result in sorted(results.items()):
+        if not result or result["isPrivate"]:
+            warn(f"{repository} is not publicly available and is left out of the table")
+            continue
+        alive.add(repository)
+        url = result["url"]
+        if url.lower() != repository.rstrip("/").lower():
+            warn(f"{repository} has moved to {url}")
+        license_info = result["licenseInfo"] or {}
+        labels = {
+            "device": "Device file",
+            "license": license_info["name"] if license_info.get("spdxId") not in (None, "NOASSERTION") else "License",
+        }
+        for kind, candidates in REPOSITORY_FILES.items():
+            name = next((name for name in candidates if name in result["files"]), None)
+            if name:
+                files[(repository, kind)] = (f"{url}/blob/HEAD/{name}", labels[kind])
+    return alive, files
 
 
 def icon_link(url, icon, label):
@@ -118,8 +184,11 @@ def format_app(app, alive):
 
 
 def repository_file_icon(files, repository, kind, icon, label):
-    url = files.get((repository, kind))
-    return icon_link(url, icon, label) if url else icon_unavailable(icon, f"{label} not available")
+    found = files.get((repository, kind))
+    if not found:
+        return icon_unavailable(icon, f"{label} not available")
+    url, found_label = found
+    return icon_link(url, icon, found_label)
 
 
 def format_links(repository, website, alive, files):
@@ -147,11 +216,12 @@ def main(argv):
     devices = pd.DataFrame.from_dict(yml["devices"], orient="index").fillna("")
     devices.index.names = ["WhoAmI"]
     apps = devices["app"] if "app" in devices else pd.Series("", index=devices.index)
-    urls = {url for url in devices["repositoryUrl"] if url}
-    urls |= {url for url in devices["projectUrl"] if url}
-    urls |= {url for url in map(app_url, apps) if url}
-    alive = check_links(sorted(urls))
-    files = find_repository_files(sorted(url for url in devices["repositoryUrl"] if url in alive))
+    repositories = sorted({url for url in devices["repositoryUrl"] if url})
+    alive, files = check_repositories([url for url in repositories if github_path(url)])
+    links = {url for url in repositories if not github_path(url)}
+    links |= {url for url in devices["projectUrl"] if url and url not in repositories}
+    links |= {url for url in map(app_url, apps) if url}
+    alive |= check_links(sorted(links))
     listed = pd.Series(
         [
             app_url(app) in alive or repository in alive or website in alive

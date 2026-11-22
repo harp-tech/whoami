@@ -24,6 +24,8 @@ jobs:
           cache-dependency-glob: .github/workflows/gen-whoami-table.py
 
       - name: Generate the WhoAmI table
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           uv run .github/workflows/gen-whoami-table.py ./whoami.yml ./artifacts/docs/whoami.md
 
