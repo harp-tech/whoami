@@ -8,7 +8,30 @@ on:
   workflow_dispatch:
 
 jobs:
+  validate-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Needed to find changed entries
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          python-version: '3.12'
+          enable-cache: true
+          cache-dependency-glob: .github/workflows/validate-registry.py
+
+      - name: Validate the WhoAmI registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run .github/workflows/validate-registry.py ./whoami.yml ./whoami.json --base origin/${{ github.base_ref || 'main' }}
+
   build-documentation:
+    needs: validate-registry
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

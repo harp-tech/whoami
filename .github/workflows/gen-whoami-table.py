@@ -7,9 +7,7 @@
 # ]
 # ///
 
-import json
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -22,6 +20,8 @@ from urllib.parse import urlparse
 import pandas as pd
 import yaml
 
+import github_repositories
+
 APP_TYPES = {
     "dotnetTool": ("https://www.nuget.org/packages/{package}", "bi-box-seam", "{package} on nuget.org"),
 }
@@ -29,7 +29,6 @@ REPOSITORY_FILES = {
     "device": ("device.yml",),
     "license": ("LICENSE", "LICENSE.md", "LICENSE.txt"),
 }
-GRAPHQL_URL = "https://api.github.com/graphql"
 HEADERS = {"User-Agent": "whoami-link-check"}
 TIMEOUT = 20
 
@@ -76,71 +75,25 @@ def check_links(urls):
     return {url for url, result in results.items() if result == "ok"}
 
 
-def github_path(repository):
-    url = urlparse(repository)
-    return url.path.strip("/") if url.hostname == "github.com" else None
-
-
-def github_token():
-    token = os.environ.get("GITHUB_TOKEN")
-    if token:
-        return token
-    try:
-        result = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True, check=True)
-    except (OSError, subprocess.CalledProcessError):
-        return None
-    return result.stdout.strip() or None
-
-
-def query_repositories(repositories, token):
-    names = [name for candidates in REPOSITORY_FILES.values() for name in candidates]
-    fields = "isPrivate url licenseInfo { spdxId name } " + " ".join(
-        f'f{i}: object(expression: "HEAD:{name}") {{ __typename }}' for i, name in enumerate(names)
-    )
-    variables, declarations, selections = {}, [], []
-    for i, repository in enumerate(repositories):
-        variables[f"owner{i}"], variables[f"name{i}"] = github_path(repository).split("/", 1)
-        declarations.append(f"$owner{i}: String!, $name{i}: String!")
-        selections.append(f"r{i}: repository(owner: $owner{i}, name: $name{i}) {{ {fields} }}")
-    query = f"query({', '.join(declarations)}) {{ {' '.join(selections)} }}"
-    request = urllib.request.Request(
-        GRAPHQL_URL,
-        data=json.dumps({"query": query, "variables": variables}).encode(),
-        headers={**HEADERS, "Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-    )
-    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-        result = json.load(response)
-    for error in result.get("errors", []):
-        if error.get("type") != "NOT_FOUND":
-            raise RuntimeError(error.get("message"))
-    data = result.get("data") or {}
-    found = {}
-    for i, repository in enumerate(repositories):
-        entry = data.get(f"r{i}")
-        if entry:
-            entry["files"] = {name for j, name in enumerate(names) if entry[f"f{j}"]}
-        found[repository] = entry
-    return found
-
-
 def check_repositories(repositories):
-    token = github_token()
-    if not token:
+    access_token = github_repositories.token()
+    if not access_token:
         fail("repositories cannot be checked without a GitHub token, so set GITHUB_TOKEN or sign in with the GitHub CLI")
+    names = [name for candidates in REPOSITORY_FILES.values() for name in candidates]
     try:
-        results = query_repositories(repositories, token)
+        results = github_repositories.query(repositories, names, access_token)
     except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
         fail(f"repositories could not be checked ({getattr(error, 'reason', error)})")
     alive, files = set(), {}
     for repository, result in sorted(results.items()):
-        if not result or result["isPrivate"]:
+        if result is None:
             warn(f"{repository} is not publicly available and is left out of the table")
             continue
         alive.add(repository)
         url = result["url"]
         if url.lower() != repository.rstrip("/").lower():
             warn(f"{repository} has moved to {url}")
-        license_info = result["licenseInfo"] or {}
+        license_info = result["license"] or {}
         labels = {
             "device": "Device file",
             "license": license_info["name"] if license_info.get("spdxId") not in (None, "NOASSERTION") else "License",
@@ -217,8 +170,8 @@ def main(argv):
     devices.index.names = ["WhoAmI"]
     apps = devices["app"] if "app" in devices else pd.Series("", index=devices.index)
     repositories = sorted({url for url in devices["repositoryUrl"] if url})
-    alive, files = check_repositories([url for url in repositories if github_path(url)])
-    links = {url for url in repositories if not github_path(url)}
+    alive, files = check_repositories([url for url in repositories if github_repositories.repository_path(url)])
+    links = {url for url in repositories if not github_repositories.repository_path(url)}
     links |= {url for url in devices["projectUrl"] if url and url not in repositories}
     links |= {url for url in map(app_url, apps) if url}
     alive |= check_links(sorted(links))

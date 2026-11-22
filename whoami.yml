@@ -22,8 +22,10 @@ devices:
     projectUrl: https://harp-tech.org/device.hobgoblin
   256:
     name: USBHub
+    legacy: true
   1024:
     name: Poke
+    legacy: true
   1040:
     <<: *harptech
     name: MultiPwm
@@ -31,13 +33,16 @@ devices:
     projectUrl: https://github.com/harp-tech/device.multipwm
   1056:
     name: Wear
+    legacy: true
   1058:
     <<: *harptech
     name: WearBaseStationGen2
+    legacy: true
     repositoryUrl: https://github.com/harp-tech/harp_wear_basestation_v2
     projectUrl: https://github.com/harp-tech/harp_wear_basestation_v2
   1072:
     name: Driver12Volts
+    legacy: true
   1088:
     <<: *harptech
     name: LedArray
@@ -60,6 +65,7 @@ devices:
     projectUrl: https://github.com/harp-tech/device.outputexpander
   1121:
     name: SimpleAnalogGenerator
+    legacy: true
   1130:
     <<: *harptech
     name: StepperDriver
@@ -67,6 +73,7 @@ devices:
     projectUrl: https://github.com/harp-tech/device.stepperdriver
   1136:
     name: Archimedes
+    legacy: true
   1140:
     <<: *harptech
     name: Olfactometer
@@ -80,6 +87,7 @@ devices:
   1154:
     <<: *harptech
     name: TimestampGeneratorGen1
+    legacy: true
     repositoryUrl: https://github.com/harp-tech/harp_timestamp_generator_Gen1
     projectUrl: https://github.com/harp-tech/harp_timestamp_generator_Gen1
   1158:
@@ -99,8 +107,10 @@ devices:
     projectUrl: https://github.com/harp-tech/device.cameracontrollergen2
   1184:
     name: PyControlAdapter
+    legacy: true
   1200:
     name: FlyPad
+    legacy: true
   1216:
     <<: *harptech
     name: Behavior
@@ -215,11 +225,13 @@ devices:
   2064:
     <<: *neurophotometrics
     name: NeurophotometricsFP3002
+    legacy: true
     repositoryUrl: https://github.com/neurophotometrics/neurophotometrics
     projectUrl: https://github.com/neurophotometrics/neurophotometrics
   2080:
     <<: *harptech
     name: Ibl_behavior_control
+    legacy: true
     repositoryUrl: https://github.com/harp-tech/IBL_behavior_control
     projectUrl: https://github.com/harp-tech/IBL_behavior_control
   2094:

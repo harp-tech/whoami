@@ -1,10 +1,10 @@
 # WhoAmI registry
 
-This repository serves as a registry for unique identifiers for devices using the Harp Protocol. The registry is published at [harp-tech.org/whoami](https://harp-tech.org/whoami), where the full table of reserved identifiers is rendered from `whoami.yml`.
+This repository serves as a registry for unique identifiers for devices using the Harp Protocol. The registry is published at [harp-tech.org/whoami](https://harp-tech.org/whoami), where a table of the registered devices is rendered from `whoami.yml`.
 
 ## Reserving a `WhoAmI` identifier
 
-To reserve a `WhoAmI` please submit a Pull Request with the desired identifier to the `whoami.yml` file in the root of this repository. Make sure you include a description of the device in the PR along with a source and project website, if applicable.
+To reserve a `WhoAmI` please submit a Pull Request with the desired identifier to the `whoami.yml` file in the root of this repository, along with a description of the device. Each new entry must declare an owner and a public GitHub repository with a `device.yml` at its root. The `whoAmI` and device name declared in that file must match the entry, and the name must be in PascalCase. These requirements are checked automatically on every Pull Request.
 
 ## Declaring device ownership
 
