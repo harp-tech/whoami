@@ -14,3 +14,27 @@ article table a.external[href]::after {
 article table td a {
     white-space: nowrap;
 }
+
+article table.table-bordered > :not(caption) > * > * {
+    border-left-width: 0;
+    border-right-width: 0;
+}
+
+article table .icon-links {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    vertical-align: middle;
+}
+
+article table td .icon {
+    font-size: 1.15rem;
+    line-height: 1;
+    text-decoration: none;
+    vertical-align: middle;
+}
+
+article table td .icon-unavailable {
+    color: var(--bs-tertiary-color);
+    cursor: default;
+}

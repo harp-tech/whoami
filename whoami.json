@@ -29,10 +29,6 @@
                     "type": "string",
                     "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
                 },
-                "copyright": {
-                    "description": "The copyright holder of the device",
-                    "type": "string"
-                },
                 "projectUrl": {
                     "description": "The address of the home page of the device",
                     "type": "string"
@@ -65,14 +61,10 @@
             "type": "object"
         },
         "owner": {
-            "description": "A combination of authors and copyright, referred to from each device with a merge key",
+            "description": "An owner shared by several devices, referred to from each device with a merge key",
             "properties": {
                 "authors": {
                     "description": "The authors of the devices",
-                    "type": "string"
-                },
-                "copyright": {
-                    "description": "The copyright holder of the devices",
                     "type": "string"
                 }
             },

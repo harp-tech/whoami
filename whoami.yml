@@ -4,35 +4,29 @@
 
 owners:
   aind: &aind
-    authors: AllenNeuralDynamics
-    copyright: AllenNeuralDynamics
+    authors: Allen Institute
   champalimaud: &champalimaud
-    authors: ChampalimaudFoundation
-    copyright: ChampalimaudFoundation
+    authors: Champalimaud Foundation
   harptech: &harptech
     authors: harp-tech
-    copyright: harp-tech
   neurogears: &neurogears
     authors: NeuroGEARS
-    copyright: NeuroGEARS
   neurophotometrics: &neurophotometrics
-    copyright: Neurophotometrics
-  oeps: &oeps
-    authors: OEPS
+    authors: Neurophotometrics
 
 devices:
   123:
     <<: *harptech
     name: Hobgoblin
     repositoryUrl: https://github.com/harp-tech/device.hobgoblin
-    projectUrl: https://github.com/harp-tech/device.hobgoblin
+    projectUrl: https://harp-tech.org/device.hobgoblin
   256:
     name: USBHub
   1024:
     name: Poke
   1040:
     <<: *harptech
-    name: MultiPwmGenerator
+    name: MultiPwm
     repositoryUrl: https://github.com/harp-tech/device.multipwm
     projectUrl: https://github.com/harp-tech/device.multipwm
   1056:
@@ -45,7 +39,10 @@ devices:
   1072:
     name: Driver12Volts
   1088:
-    name: LedController
+    <<: *harptech
+    name: LedArray
+    repositoryUrl: https://github.com/harp-tech/device.ledarray
+    projectUrl: https://github.com/harp-tech/device.ledarray
   1104:
     <<: *harptech
     name: Synchronizer
@@ -64,7 +61,7 @@ devices:
   1121:
     name: SimpleAnalogGenerator
   1130:
-    <<: *oeps
+    <<: *harptech
     name: StepperDriver
     repositoryUrl: https://github.com/harp-tech/device.stepperdriver
     projectUrl: https://github.com/harp-tech/device.stepperdriver
@@ -78,8 +75,8 @@ devices:
   1152:
     <<: *harptech
     name: ClockSynchronizer
-    repositoryUrl: https://github.com/harp-tech/device.clocksync
-    projectUrl: https://github.com/harp-tech/device.clocksync
+    repositoryUrl: https://github.com/harp-tech/device.clocksynchronizer
+    projectUrl: https://github.com/harp-tech/device.clocksynchronizer
   1154:
     <<: *harptech
     name: TimestampGeneratorGen1
@@ -89,7 +86,7 @@ devices:
     <<: *harptech
     name: TimestampGeneratorGen3
     repositoryUrl: https://github.com/harp-tech/device.timestampgeneratorgen3
-    projectUrl: https://github.com/harp-tech/device.timestampgeneratorgen3
+    projectUrl: https://harp-tech.org/device.timestampgeneratorgen3
   1168:
     <<: *harptech
     name: CameraController
@@ -102,24 +99,26 @@ devices:
     projectUrl: https://github.com/harp-tech/device.cameracontrollergen2
   1184:
     name: PyControlAdapter
+  1200:
+    name: FlyPad
   1216:
     <<: *harptech
     name: Behavior
     repositoryUrl: https://github.com/harp-tech/device.behavior
-    projectUrl: https://github.com/harp-tech/device.behavior
+    projectUrl: https://harp-tech.org/device.behavior
     app:
       type: dotnetTool
       package: Harp.Behavior.App
   1224:
-    <<: *neurogears
+    <<: *harptech
     name: VestibularH1
-    repositoryUrl: https://github.com/neurogears/device.vestibularH1
-    projectUrl: https://github.com/neurogears/device.vestibularH1
+    repositoryUrl: https://github.com/harp-tech/device.vestibularH1
+    projectUrl: https://github.com/harp-tech/device.vestibularH1
   1225:
-    <<: *neurogears
+    <<: *harptech
     name: VestibularH2
-    repositoryUrl: https://github.com/neurogears/device.vestibularH2
-    projectUrl: https://github.com/neurogears/device.vestibularH2
+    repositoryUrl: https://github.com/harp-tech/device.vestibularH2
+    projectUrl: https://github.com/harp-tech/device.vestibularH2
   1232:
     <<: *harptech
     name: LoadCells
@@ -140,13 +139,14 @@ devices:
     name: RgbArray
     repositoryUrl: https://github.com/harp-tech/device.rgbarray
     projectUrl: https://github.com/harp-tech/device.rgbarray
-  1200:
-    name: FlyPad
   1280:
     <<: *harptech
     name: SoundCard
     repositoryUrl: https://github.com/harp-tech/device.soundcard
-    projectUrl: https://github.com/harp-tech/device.soundcard
+    projectUrl: https://harp-tech.org/device.soundcard
+    app:
+      type: dotnetTool
+      package: Harp.SoundCard.App
   1282:
     <<: *champalimaud
     name: CurrentDriver
@@ -162,6 +162,56 @@ devices:
     name: LaserDriverController
     repositoryUrl: https://github.com/fchampalimaud/device.laserdrivercontroller
     projectUrl: https://github.com/fchampalimaud/device.laserdrivercontroller
+  1400:
+    <<: *aind
+    name: LicketySplit
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.lickety-split
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.lickety-split
+  1401:
+    <<: *aind
+    name: SniffDetector
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.sniff-detector
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.sniff-detector
+  1402:
+    <<: *aind
+    name: Treadmill
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.treadmill-driver
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.treadmill-driver
+  1403:
+    <<: *aind
+    name: Cuttlefish
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish
+  1404:
+    <<: *aind
+    name: WhiteRabbit
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.white-rabbit
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.white-rabbit
+  1405:
+    <<: *aind
+    name: EnvironmentSensor
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.environment-sensor
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.environment-sensor
+  1407:
+    <<: *aind
+    name: CuttlefishFip
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
+  1410:
+    <<: *aind
+    name: deLuxDriver
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver
+  1411:
+    <<: *aind
+    name: Quac
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.quac
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.quac
+  1412:
+    <<: *aind
+    name: PhotodiodeBoard
+    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.PhotodiodeBoard
+    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.PhotodiodeBoard
   2064:
     <<: *neurophotometrics
     name: NeurophotometricsFP3002
@@ -182,48 +232,8 @@ devices:
     name: Pluma
     repositoryUrl: https://github.com/emotional-cities/pluma
     projectUrl: https://github.com/emotional-cities/pluma
-  1400:
-    <<: *aind
-    name: LicketySplit
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.lickety-split
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.lickety-split
-  1401:
-    <<: *aind
-    name: SniffDetector
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.sniff-detector
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.sniff-detector
-  1402:
-    <<: *aind
-    name: Treadmill
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.treadmill
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.treadmill
-  1403:
-    <<: *aind
-    name: cuTTLefish
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish
-  1404:
-    <<: *aind
-    name: WhiteRabbit
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.white-rabbit
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.white-rabbit
-  1405:
-    <<: *aind
-    name: EnvironmentSensor
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.environment-sensor
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.environment-sensor
-  1407:
-    <<: *aind
-    name: cuTTLefishFip
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.cuttlefish-fip
-  1410:
-    <<: *aind
-    name: deLuxDriver
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.delux-driver     
-  1411:
-    <<: *aind
-    name: Quac
-    repositoryUrl: https://github.com/AllenNeuralDynamics/harp.device.quac
-    projectUrl: https://github.com/AllenNeuralDynamics/harp.device.quac   
+  2120:
+    <<: *harptech
+    name: FastStepper
+    repositoryUrl: https://github.com/harp-tech/device.faststepper
+    projectUrl: https://github.com/harp-tech/device.faststepper
