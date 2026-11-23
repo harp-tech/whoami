@@ -13,6 +13,8 @@ owners:
     authors: NeuroGEARS
   neurophotometrics: &neurophotometrics
     authors: Neurophotometrics
+  swc: &swc
+    authors: Sainsbury Wellcome Centre
 
 devices:
   123:
@@ -249,3 +251,8 @@ devices:
     name: FastStepper
     repositoryUrl: https://github.com/harp-tech/device.faststepper
     projectUrl: https://github.com/harp-tech/device.faststepper
+  3002:
+    <<: *swc
+    name: VertiGate
+    repositoryUrl: https://github.com/SainsburyWellcomeCentre/aeon_vertigate
+    projectUrl: https://aeon.swc.ucl.ac.uk
