@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from typing import NoReturn
+from urllib.parse import urlparse
 
 import questionary
 import yaml
@@ -33,6 +34,9 @@ OWNER_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 DEVICE_KEY = re.compile(r"^  (\d+):\s*$")
 OWNER_KEY = re.compile(r"^  ([a-z][a-z0-9-]*): &")
 NEW_OWNER = "+"
+URL_SCHEME = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
+ENTRY_FIELDS = ("name", "repositoryUrl", "projectUrl")
+MERGE_LINE = re.compile(r"^    <<: \*([a-z][a-z0-9-]*)\s*$")
 
 
 def fail(message) -> NoReturn:
@@ -110,13 +114,14 @@ def ask_authors(owner=None):
     return ask(questionary.text(prompt, validate=check_authors)).strip()
 
 
-def choose_owner(owners, owner, authors):
+def choose_owner(owners, owner, authors, current=None):
     if owner is None:
         if not interactive():
             fail("specify --owner when the script does not run in a terminal")
         choices = [questionary.Choice(f"{value.get('authors')} ({key})", value=key) for key, value in owners.items()]
         choices += [questionary.Separator(), questionary.Choice("Add a new owner", value=NEW_OWNER)]
-        owner = ask(questionary.select("Owner of the device", choices=choices))
+        default = current if current in owners else None
+        owner = ask(questionary.select("Owner of the device", choices=choices, default=default))
         if owner != NEW_OWNER:
             return owner, None
         authors = ask_authors()
@@ -128,6 +133,52 @@ def choose_owner(owners, owner, authors):
     if not OWNER_PATTERN.match(owner):
         fail(f"the owner key {owner} must be lowercase letters, digits and hyphens")
     return owner, authors if authors else ask_authors(owner)
+
+
+def same_url(first, second):
+    return bool(first and second) and first.rstrip("/").lower() == second.rstrip("/").lower()
+
+
+def normalize_url(text):
+    text = text.strip()
+    return text if URL_SCHEME.match(text) else f"https://{text}"
+
+
+def check_url(url):
+    if not urlparse(url).hostname:
+        return f"{url} is not a valid address"
+    for method in ("HEAD", "GET"):
+        request = urllib.request.Request(url, method=method, headers=HEADERS)
+        try:
+            with urllib.request.urlopen(request, timeout=TIMEOUT):
+                return None
+        except urllib.error.HTTPError as error:
+            if method == "GET":
+                return f"{url} answered with HTTP {error.code}"
+        except (urllib.error.URLError, TimeoutError, ValueError) as error:
+            return f"{url} could not be reached ({getattr(error, 'reason', error)})"
+    return None
+
+
+def validate_url(text):
+    return not text.strip() or check_url(normalize_url(text)) or True
+
+
+def choose_project_url(current, detected, given):
+    if given is not None:
+        url = normalize_url(given)
+        problem = check_url(url)
+        if problem:
+            fail(problem)
+        return url
+    if not interactive():
+        return detected or current
+    if detected and not same_url(detected, current):
+        if ask(questionary.confirm(f"Use {detected} as the project website?")):
+            return detected
+    hint = f"Enter to keep {current}" if current else "Enter to skip"
+    answer = ask(questionary.text(f"Project website ({hint})", validate=validate_url, validate_while_typing=False))
+    return normalize_url(answer) if answer.strip() else current
 
 
 def section_end(lines, start):
@@ -155,29 +206,119 @@ class Block:
         self.lines = lines
 
 
-def add_entry(text, whoami, name, repository, owner, authors):
+def add_owner(lines, owner, authors):
+    block = Block(owner, [f"  {owner}: &{owner}", f"    authors: {authors}"])
+    return insert_block(lines, "owners:", OWNER_KEY, str, block), ["owners:", *block.lines]
+
+
+def remove_owner(lines, owner):
+    start = lines.index(f"  {owner}: &{owner}")
+    end = start + 1
+    while end < len(lines) and lines[end].startswith("    "):
+        end += 1
+    return lines[:start] + lines[end:]
+
+
+def owner_uses(text, owner):
+    return sum(1 for line in text.splitlines() if (match := MERGE_LINE.match(line)) and match[1] == owner)
+
+
+def entry_bounds(lines, whoami):
+    start = next(index for index, line in enumerate(lines) if DEVICE_KEY.match(line) and line.strip() == f"{whoami}:")
+    end = start + 1
+    while end < len(lines) and lines[end].startswith("    "):
+        end += 1
+    return start, end
+
+
+def entry_owner(text, whoami):
+    lines = text.splitlines()
+    start, end = entry_bounds(lines, whoami)
+    return next((match[1] for line in lines[start + 1 : end] if (match := MERGE_LINE.match(line))), None)
+
+
+def add_entry(text, whoami, name, repository, project_url, owner, authors):
     newline = "\r\n" if "\r\n" in text else "\n"
     lines = text.splitlines()
     added = []
     if authors is not None:
-        owner_block = Block(owner, [f"  {owner}: &{owner}", f"    authors: {authors}"])
-        lines = insert_block(lines, "owners:", OWNER_KEY, str, owner_block)
-        added += ["owners:", *owner_block.lines]
-    device_block = Block(str(whoami), [
-        f"  {whoami}:",
-        f"    <<: *{owner}",
-        f"    name: {name}",
-        f"    repositoryUrl: {repository}",
-    ])
-    lines = insert_block(lines, "devices:", DEVICE_KEY, int, device_block)
-    added += ["devices:", *device_block.lines]
+        lines, added = add_owner(lines, owner, authors)
+    device_lines = [f"  {whoami}:", f"    <<: *{owner}", f"    name: {name}", f"    repositoryUrl: {repository}"]
+    if project_url:
+        device_lines.append(f"    projectUrl: {project_url}")
+    lines = insert_block(lines, "devices:", DEVICE_KEY, int, Block(str(whoami), device_lines))
+    added += ["devices:", *device_lines]
     return newline.join(lines) + newline, "\n".join(added)
 
 
+def edit_entry(text, whoami, changes, authors=None):
+    newline = "\r\n" if "\r\n" in text else "\n"
+    previous = entry_owner(text, whoami)
+    lines, shown = text.splitlines(), []
+    if "owner" in changes and authors is not None:
+        lines, shown = add_owner(lines, changes["owner"], authors)
+    start, end = entry_bounds(lines, whoami)
+    if "owner" in changes:
+        found = [index for index in range(start + 1, end) if MERGE_LINE.match(lines[index])]
+        if found:
+            lines[found[0]] = f"    <<: *{changes['owner']}"
+        else:
+            lines.insert(start + 1, f"    <<: *{changes['owner']}")
+            end += 1
+    for field in ENTRY_FIELDS:
+        if field not in changes:
+            continue
+        found = [index for index in range(start + 1, end) if lines[index].startswith(f"    {field}:")]
+        if changes[field] is None:
+            if found:
+                del lines[found[0]]
+                end -= 1
+            continue
+        line = f"    {field}: {changes[field]}"
+        if found:
+            lines[found[0]] = line
+            continue
+        earlier = ENTRY_FIELDS[: ENTRY_FIELDS.index(field)]
+        anchors = [index for index in range(start + 1, end) if lines[index].split(":")[0].strip() in earlier]
+        position = max(anchors) + 1 if anchors else end
+        lines.insert(position, line)
+        end += 1
+    shown += ["devices:", *lines[start:end]]
+    updated = newline.join(lines) + newline
+    if previous and "owner" in changes and not owner_uses(updated, previous):
+        updated = newline.join(remove_owner(updated.splitlines(), previous)) + newline
+    return updated, "\n".join(shown)
+
+
+def show_changes(text, whoami, entry, current_owner, changes):
+    if not changes:
+        print(f"The entry of {whoami} {entry.get('name')} is up to date")
+        return
+    print("Changes to the entry:")
+    if "owner" in changes:
+        print(f"  owner: {current_owner or '(none)'} -> {changes['owner']}")
+        if current_owner and owner_uses(text, current_owner) == 1:
+            print(f"  owners: {current_owner} is removed, since no other device uses it")
+    for field in ENTRY_FIELDS:
+        if field in changes:
+            print(f"  {field}: {entry.get(field) or '(none)'} -> {changes[field] or '(removed)'}")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Adds the device in the current repository to the WhoAmI registry.")
-    parser.add_argument("--owner", help="the key of an existing owner, or of a new owner to add")
+    parser = argparse.ArgumentParser(
+        description="Adds the device in the current repository to the WhoAmI registry, or updates its entry."
+    )
+    parser.add_argument(
+        "--owner", help="the key of an existing or new owner, which also changes the owner of a registered device"
+    )
     parser.add_argument("--authors", help="the name shown as the owner, when adding a new owner")
+    parser.add_argument("--project-url", help="the address of the home page of the device")
+    parser.add_argument(
+        "--remove-project-url", action="store_true", help="remove the address of the home page of a registered device"
+    )
+    parser.add_argument(
+        "--edit", action="store_true", help="change the owner or remove the home page of a registered device"
+    )
     parser.add_argument("--output", help="the folder of a clone of the registry repository to write the updated files to")
     parser.add_argument("--registry", default=REGISTRY_URL, help="the address or path of the registry to update")
     parser.add_argument("--schema", default=SCHEMA_URL, help="the address or path of the registry schema")
@@ -192,10 +333,8 @@ def main():
         fail(f"the registry could not be read ({getattr(error, 'reason', error)})")
     registry = yaml.safe_load(text) or {}
     owners, devices = registry.get("owners") or {}, registry.get("devices") or {}
-    if whoami in devices:
-        fail(f"WhoAmI {whoami} is already registered to {devices[whoami].get('name')}")
     for key, entry in devices.items():
-        if str(entry.get("name", "")).lower() == name.lower():
+        if key != whoami and str(entry.get("name", "")).lower() == name.lower():
             fail(f"the name {name} is already registered to WhoAmI {key}")
 
     access_token = github.token()
@@ -208,10 +347,67 @@ def main():
     if result is None:
         fail(f"{repository} is not public or does not exist")
     repository = result["url"]
-    print(f"Registering {whoami} {name} from {repository}")
+    try:
+        detected = result["homepage"] or github.pages_url(repository, access_token)
+    except (urllib.error.URLError, TimeoutError):
+        detected = None
 
-    owner, authors = choose_owner(owners, args.owner, args.authors)
-    updated, added = add_entry(text, whoami, name, repository, owner, authors)
+    entry = devices.get(whoami)
+    if entry is None:
+        print(f"Registering {whoami} {name} from {repository}")
+        owner, authors = choose_owner(owners, args.owner, args.authors)
+        project_url = choose_project_url(None, detected, args.project_url)
+        updated, added = add_entry(text, whoami, name, repository, project_url, owner, authors)
+        action = "register"
+    else:
+        print(f"{whoami} {entry.get('name')} is already registered, checking its entry")
+        current_owner = entry_owner(text, whoami)
+        project_url = choose_project_url(entry.get("projectUrl"), detected, args.project_url)
+        values = {"name": name, "repositoryUrl": repository, "projectUrl": project_url}
+        changes = {
+            field: value
+            for field, value in values.items()
+            if value and value != entry.get(field) and not same_url(value, entry.get(field))
+        }
+        authors = None
+        if args.owner and args.owner != current_owner:
+            changes["owner"], authors = choose_owner(owners, args.owner, args.authors)
+        if args.remove_project_url and entry.get("projectUrl"):
+            changes["projectUrl"] = None
+        if interactive():
+            edit = args.edit
+            if not edit:
+                show_changes(text, whoami, entry, current_owner, changes)
+                choices = [
+                    questionary.Choice("Apply the changes" if changes else "Done", value="apply"),
+                    questionary.Choice("Change the owner or remove the project website", value="edit"),
+                    questionary.Choice("Cancel", value="cancel"),
+                ]
+                choice = ask(questionary.select("What would you like to do?", choices=choices))
+                if choice == "cancel":
+                    return
+                edit = choice == "edit"
+            if edit:
+                owner, new_authors = choose_owner(owners, None, None, current=current_owner)
+                changes.pop("owner", None)
+                authors = None
+                if owner != current_owner:
+                    changes["owner"], authors = owner, new_authors
+                website = changes.get("projectUrl", entry.get("projectUrl"))
+                if website and ask(questionary.confirm(f"Remove the project website {website}?", default=False)):
+                    if entry.get("projectUrl"):
+                        changes["projectUrl"] = None
+                    else:
+                        changes.pop("projectUrl")
+                show_changes(text, whoami, entry, current_owner, changes)
+                if changes and not ask(questionary.confirm("Apply the changes?")):
+                    return
+        else:
+            show_changes(text, whoami, entry, current_owner, changes)
+        if not changes:
+            return
+        updated, added = edit_entry(text, whoami, changes, authors)
+        action = "update"
     try:
         diagnostics = validate(updated, schema, devices, access_token)
     except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
@@ -229,7 +425,7 @@ def main():
     except ValueError as error:
         fail(f"the registry module could not be generated ({error})")
 
-    print(f"{whoami} {name} is ready to register:")
+    print(f"{whoami} {name} is ready to {action}:")
     print(added)
     if args.output:
         folder = Path(args.output)
@@ -240,7 +436,7 @@ def main():
             return
         write(folder / REGISTRY_FILE, updated)
         write(folder / MODULE_FILE, module)
-        print(f"Added {whoami} {name} to {folder / REGISTRY_FILE} and regenerated {folder / MODULE_FILE}")
+        print(f"Updated {folder / REGISTRY_FILE} and regenerated {folder / MODULE_FILE}")
 
 
 if __name__ == "__main__":

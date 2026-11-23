@@ -1,10 +1,13 @@
 import json
 import os
 import subprocess
+import urllib.error
 import urllib.request
+from http import HTTPStatus
 from urllib.parse import urlparse
 
-GRAPHQL_URL = "https://api.github.com/graphql"
+API_URL = "https://api.github.com"
+GRAPHQL_URL = f"{API_URL}/graphql"
 HEADERS = {"User-Agent": "whoami-registry"}
 TIMEOUT = 20
 
@@ -28,9 +31,9 @@ def token():
 
 
 def query(repositories, files, access_token):
-    """Returns each public repository with its canonical URL, license and the text of the
+    """Returns each public repository with its canonical URL, website, license and the text of the
     specified files found at its root, or None when the repository is private or does not exist."""
-    fields = "isPrivate url licenseInfo { spdxId name } " + " ".join(
+    fields = "isPrivate url homepageUrl licenseInfo { spdxId name } " + " ".join(
         f'f{i}: object(expression: "HEAD:{name}") {{ ... on Blob {{ text }} }}' for i, name in enumerate(files)
     )
     variables, declarations, selections = {}, [], []
@@ -63,5 +66,25 @@ def query(repositories, files, access_token):
             blob = entry[f"f{j}"] or {}
             if blob.get("text") is not None:
                 texts[name] = blob["text"]
-        found[repository] = {"url": entry["url"], "license": entry["licenseInfo"], "files": texts}
+        found[repository] = {
+            "url": entry["url"],
+            "homepage": entry["homepageUrl"] or None,
+            "license": entry["licenseInfo"],
+            "files": texts,
+        }
     return found
+
+
+def pages_url(repository, access_token):
+    """Returns the address of the GitHub Pages site of a repository, or None if it has none."""
+    request = urllib.request.Request(
+        f"{API_URL}/repos/{repository_path(repository)}/pages",
+        headers={**HEADERS, "Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+            return json.load(response).get("html_url")
+    except urllib.error.HTTPError as error:
+        if error.code == HTTPStatus.NOT_FOUND:
+            return None
+        raise
