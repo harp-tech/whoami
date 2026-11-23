@@ -32,9 +32,9 @@ def token():
 
 
 def query(repositories, files, access_token):
-    """Returns each public repository with its canonical URL, website, license and the text of the
-    specified files found at its root, or None when the repository is private or does not exist."""
-    fields = "isPrivate url homepageUrl licenseInfo { spdxId name } " + " ".join(
+    """Returns each public repository with its canonical URL, website, parent if it is a fork, license and the
+    text of the specified files found at its root, or None when the repository is private or does not exist."""
+    fields = "isPrivate url homepageUrl parent { url } licenseInfo { spdxId name } " + " ".join(
         f'f{i}: object(expression: "HEAD:{name}") {{ ... on Blob {{ text }} }}' for i, name in enumerate(files)
     )
     variables, declarations, selections = {}, [], []
@@ -70,6 +70,7 @@ def query(repositories, files, access_token):
         found[repository] = {
             "url": entry["url"],
             "homepage": entry["homepageUrl"] or None,
+            "parent": (entry["parent"] or {}).get("url"),
             "license": entry["licenseInfo"],
             "files": texts,
         }

@@ -10,6 +10,7 @@ import argparse
 import json
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -150,6 +151,23 @@ def read_repository():
     if not match:
         fail(f"the origin remote {remote} is not a GitHub repository")
     return f"https://github.com/{match['path']}"
+
+
+def check_repository(repository, access_token):
+    visited = set()
+    while True:
+        try:
+            result = github.query([repository], [], access_token)[repository]
+        except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
+            fail(f"the repository could not be checked ({getattr(error, 'reason', error)})")
+        if result is None:
+            fail(f"{repository} is not public or does not exist")
+        visited.add(result["url"].lower())
+        parent = result["parent"]
+        if not parent or parent.lower() in visited:
+            return result
+        print(f"{result['url']} is a fork, so the device is registered from {parent}")
+        repository = parent
 
 
 def interactive():
@@ -409,6 +427,8 @@ def main():
     parser.add_argument("--upstream", default=UPSTREAM, help="the registry repository, as owner and name")
     args = parser.parse_args()
 
+    if shutil.which("git") is None:
+        fail("git is not installed, and is needed to read the origin remote of the device repository")
     whoami, name = read_device()
     repository = read_repository()
     access_token = github.token()
@@ -426,12 +446,7 @@ def main():
         if key != whoami and str(entry.get("name", "")).lower() == name.lower():
             fail(f"the name {name} is already registered to WhoAmI {key}")
 
-    try:
-        result = github.query([repository], [], access_token)[repository]
-    except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
-        fail(f"the repository could not be checked ({getattr(error, 'reason', error)})")
-    if result is None:
-        fail(f"{repository} is not public or does not exist")
+    result = check_repository(repository, access_token)
     repository = result["url"]
     try:
         detected = result["homepage"] or github.pages_url(repository, access_token)
