@@ -150,7 +150,8 @@ def main(argv):
     path_to_whoami = argv[0]
     path_to_table = Path(argv[1])
     yml = yaml.load(open(path_to_whoami, encoding="utf-8"), yaml.Loader)
-    devices = pd.DataFrame.from_dict(yml["devices"], orient="index").fillna("")
+    current = {key: entry for key, entry in yml["devices"].items() if not entry.get("legacy")}
+    devices = pd.DataFrame.from_dict(current, orient="index").fillna("")
     devices.index.names = ["WhoAmI"]
     apps = devices["app"] if "app" in devices else pd.Series("", index=devices.index)
     repositories = sorted({url for url in devices["repositoryUrl"] if url})
