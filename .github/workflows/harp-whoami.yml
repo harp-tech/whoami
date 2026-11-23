@@ -4,20 +4,13 @@ on:
   push:
     branches: ['**']
   pull_request:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
-      release:
-        description: "Release the package, the registration script and the documentation if the package changed?"
-        type: boolean
-        default: false
       publish-documentation:
-        description: "Publish the documentation of the latest release to GitHub Pages?"
-        type: boolean
-        default: false
-
-concurrency:
-  group: ${{ inputs.release && 'release' || github.run_id }}
-  cancel-in-progress: false
+        description: "Publish documentation to GitHub Pages?"
+        default: "false"
 
 jobs:
   validate-registry:
@@ -59,8 +52,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
 
       - name: Annotate errors and warnings
         run: echo "::add-matcher::.github/workflows/problem-matcher.json"
@@ -72,10 +63,12 @@ jobs:
 
       - name: Find the package version
         id: version
-        if: inputs.release && github.ref == 'refs/heads/main'
-        run: |
-          version=$(uv run --group release .github/workflows/package-version.py)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+        if: |
+          github.event_name == 'release'
+          || (github.event.inputs.publish-documentation == 'true' && github.ref_type == 'tag')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build package
         env:
@@ -114,29 +107,13 @@ jobs:
           name: script
           path: artifacts/script/
 
-  find-release:
-    if: inputs.publish-documentation && !inputs.release
-    runs-on: ubuntu-latest
-    outputs:
-      tag: ${{ steps.release.outputs.tag }}
-    steps:
-      - name: Find the latest release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag=$(gh release view --repo ${{ github.repository }} --json tagName --jq .tagName)
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-
   build-documentation:
-    needs: [build-package, find-release]
-    if: ${{ !cancelled() && !failure() }}
+    needs: build-package
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
-          ref: ${{ needs.find-release.outputs.tag }}
           submodules: recursive
 
       - name: Annotate errors and warnings
@@ -160,12 +137,6 @@ jobs:
           name: script
           path: artifacts/docs/
 
-      - name: Download the registration script of the latest release
-        if: needs.find-release.outputs.tag != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release download "${{ needs.find-release.outputs.tag }}" --repo ${{ github.repository }} --pattern register.py --dir artifacts/docs
-
       - name: Set up .NET
         uses: actions/setup-dotnet@v5
         with:
@@ -178,14 +149,14 @@ jobs:
         run: dotnet docfx build docs/docfx.json
 
       - name: Collect documentation website artifact
-        if: needs.build-package.outputs.version != '' || needs.find-release.outputs.tag != ''
+        if: needs.build-package.outputs.version != ''
         uses: actions/upload-pages-artifact@v5
         with:
           path: artifacts/docs/site/
 
   publish-package:
     needs: [build-package, build-documentation]
-    if: needs.build-package.outputs.version != ''
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -205,14 +176,10 @@ jobs:
           name: script
           path: script/
 
-      - name: Create the release
+      - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.build-package.outputs.version }}
-        run: |
-          gh release view "v$VERSION" --repo ${{ github.repository }} > /dev/null 2>&1 \
-            || gh release create "v$VERSION" --repo ${{ github.repository }} --target ${{ github.sha }} --title "harp-whoami $VERSION" --generate-notes
-          gh release upload "v$VERSION" dist/* script/register.py --repo ${{ github.repository }} --clobber
+        run: gh release upload --repo ${{ github.repository }} ${{ github.event.release.tag_name }} dist/* script/register.py --clobber
 
       - name: Install uv
         uses: astral-sh/setup-uv@v9.0.0
@@ -223,10 +190,11 @@ jobs:
         run: uv publish
 
   publish-documentation:
-    needs: [build-package, find-release, build-documentation, publish-package]
+    needs: [build-package, build-documentation, publish-package]
     if: |
       !cancelled() && !failure() && needs.build-documentation.result == 'success'
-      && (needs.publish-package.result == 'success' || needs.find-release.outputs.tag != '')
+      && needs.build-package.outputs.version != ''
+      && (needs.publish-package.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     concurrency:
       # Pages refuses a deployment while another is in progress
