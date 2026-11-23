@@ -1,13 +1,3 @@
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#     "pandas==3.0.5",
-#     "pyyaml==6.0.3",
-#     "tabulate==0.10.0",
-# ]
-# ///
-
-import os
 import sys
 import urllib.error
 import urllib.request
@@ -20,7 +10,7 @@ from urllib.parse import urlparse
 import pandas as pd
 import yaml
 
-import github_repositories
+from harp.whoami import github
 
 APP_TYPES = {
     "dotnetTool": ("https://www.nuget.org/packages/{package}", "bi-box-seam", "{package} on nuget.org"),
@@ -34,17 +24,11 @@ TIMEOUT = 20
 
 
 def warn(message):
-    if os.environ.get("GITHUB_ACTIONS"):
-        print(f"::warning::{message}")
-    else:
-        print(f"warning: {message}", file=sys.stderr)
+    print(f"warning: {message}", file=sys.stderr)
 
 
 def fail(message):
-    if os.environ.get("GITHUB_ACTIONS"):
-        print(f"::error::{message}")
-    else:
-        print(f"error: {message}", file=sys.stderr)
+    print(f"error: {message}", file=sys.stderr)
     sys.exit(1)
 
 
@@ -76,12 +60,12 @@ def check_links(urls):
 
 
 def check_repositories(repositories):
-    access_token = github_repositories.token()
+    access_token = github.token()
     if not access_token:
         fail("repositories cannot be checked without a GitHub token, so set GITHUB_TOKEN or sign in with the GitHub CLI")
     names = [name for candidates in REPOSITORY_FILES.values() for name in candidates]
     try:
-        results = github_repositories.query(repositories, names, access_token)
+        results = github.query(repositories, names, access_token)
     except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
         fail(f"repositories could not be checked ({getattr(error, 'reason', error)})")
     alive, files = set(), {}
@@ -166,12 +150,13 @@ def main(argv):
     path_to_whoami = argv[0]
     path_to_table = Path(argv[1])
     yml = yaml.load(open(path_to_whoami, encoding="utf-8"), yaml.Loader)
-    devices = pd.DataFrame.from_dict(yml["devices"], orient="index").fillna("")
+    current = {key: entry for key, entry in yml["devices"].items() if not entry.get("legacy")}
+    devices = pd.DataFrame.from_dict(current, orient="index").fillna("")
     devices.index.names = ["WhoAmI"]
     apps = devices["app"] if "app" in devices else pd.Series("", index=devices.index)
     repositories = sorted({url for url in devices["repositoryUrl"] if url})
-    alive, files = check_repositories([url for url in repositories if github_repositories.repository_path(url)])
-    links = {url for url in repositories if not github_repositories.repository_path(url)}
+    alive, files = check_repositories([url for url in repositories if github.repository_path(url)])
+    links = {url for url in repositories if not github.repository_path(url)}
     links |= {url for url in devices["projectUrl"] if url and url not in repositories}
     links |= {url for url in map(app_url, apps) if url}
     alive |= check_links(sorted(links))

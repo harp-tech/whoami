@@ -1,4 +1,4 @@
-__pycache__
-_site
-artifacts
-obj
+/artifacts/
+/build/
+__pycache__/
+*.egg-info/

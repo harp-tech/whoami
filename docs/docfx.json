@@ -20,6 +20,12 @@
           "whoami.yml",
           "whoami.json"
         ]
+      },
+      {
+        "src": "../artifacts/docs",
+        "files": [
+          "register.py"
+        ]
       }
     ],
     "globalMetadata": {
@@ -35,7 +41,7 @@
       "_navRel": "../toc.html",
       "_tocRel": "../build/toc.html"
     },
-    "dest": "_site",
+    "output": "../artifacts/docs/site/",
     "template": [
       "default",
       "modern",
