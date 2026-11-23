@@ -1,4 +1,4 @@
-name: "Release the WhoAmI package"
+name: release
 
 on:
   schedule:

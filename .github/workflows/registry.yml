@@ -1,5 +1,5 @@
 
-name: "Publish the WhoAmI registry"
+name: registry
 
 on:
   push:
