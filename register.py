@@ -9,10 +9,14 @@
 import argparse
 import json
 import re
+import secrets
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
+import webbrowser
+from http import HTTPStatus
 from pathlib import Path
 from typing import NoReturn
 from urllib.parse import urlparse
@@ -24,9 +28,11 @@ from harp.whoami import github
 from harp.whoami.generation import MODULE_FILE, REGISTRY_FILE, generate
 from harp.whoami.validation import validate
 
-REGISTRY_URL = "https://harp-tech.org/whoami/whoami.yml"
-SCHEMA_URL = "https://harp-tech.org/whoami/whoami.json"
+UPSTREAM = "harp-tech/whoami"
+SCHEMA_FILE = "whoami.json"
 DEVICE_FILE = "device.yml"
+BRANCH_PREFIX = "register"
+FORK_ATTEMPTS = 5
 HEADERS = {"User-Agent": "whoami-register"}
 TIMEOUT = 20
 REMOTE_PATTERN = re.compile(r"^(?:https://|ssh://git@|git@)github\.com[/:](?P<path>[^/]+/[^/]+?)(?:\.git)?/?$")
@@ -44,12 +50,77 @@ def fail(message) -> NoReturn:
     sys.exit(1)
 
 
-def read(location):
-    if re.match(r"^https?://", location):
-        request = urllib.request.Request(location, headers=HEADERS)
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return response.read().decode("utf-8")
-    return Path(location).read_text(encoding="utf-8")
+def api_error(error):
+    if isinstance(error, urllib.error.HTTPError):
+        try:
+            return f"HTTP {error.code}: {json.loads(error.read()).get('message')}"
+        except (ValueError, AttributeError):
+            return f"HTTP {error.code}"
+    return str(getattr(error, "reason", error))
+
+
+def read_upstream(upstream, access_token):
+    repository = github.request("GET", f"/repos/{upstream}", access_token)
+    branch = repository["default_branch"]
+    commit = github.request("GET", f"/repos/{upstream}/commits/{branch}", access_token)
+    files = {
+        path: github.request("GET", f"/repos/{upstream}/contents/{path}?ref={commit['sha']}", access_token, raw=True)
+        for path in (REGISTRY_FILE, SCHEMA_FILE)
+    }
+    return {"branch": branch, "sha": commit["sha"], "tree": commit["commit"]["tree"]["sha"], "files": files}
+
+
+def open_pull_requests(upstream, login, whoami, access_token):
+    pulls = github.request("GET", f"/repos/{upstream}/pulls?state=open&per_page=100", access_token)
+    prefix = f"{login}:{BRANCH_PREFIX}-{whoami}-"
+    return [pull["html_url"] for pull in pulls if pull["head"]["label"].startswith(prefix)]
+
+
+def find_fork(upstream, login, access_token):
+    try:
+        repository = github.request("GET", f"/repos/{login}/{upstream.split('/')[1]}", access_token)
+    except urllib.error.HTTPError as error:
+        if error.code == HTTPStatus.NOT_FOUND:
+            return None
+        raise
+    parent = (repository.get("parent") or {}).get("full_name", "")
+    return repository["full_name"] if parent.lower() == upstream.lower() else None
+
+
+def submit(upstream, base, login, whoami, files, title, body, access_token):
+    fork = find_fork(upstream, login, access_token)
+    if fork is None:
+        print(f"Forking {upstream}")
+        fork = github.request("POST", f"/repos/{upstream}/forks", access_token, {})["full_name"]
+    branch = f"{BRANCH_PREFIX}-{whoami}-{secrets.token_hex(3)}"
+    for attempt in range(1, FORK_ATTEMPTS + 1):
+        try:
+            github.request("POST", f"/repos/{fork}/merge-upstream", access_token, {"branch": base["branch"]})
+            github.request("POST", f"/repos/{fork}/git/refs", access_token, {"ref": f"refs/heads/{branch}", "sha": base["sha"]})
+            break
+        except urllib.error.HTTPError as error:
+            if error.code == HTTPStatus.CONFLICT or attempt == FORK_ATTEMPTS:
+                raise
+            time.sleep(attempt)
+    try:
+        items = [{"path": path, "mode": "100644", "type": "blob", "content": text} for path, text in files.items()]
+        tree = github.request("POST", f"/repos/{fork}/git/trees", access_token, {"base_tree": base["tree"], "tree": items})
+        commit = github.request(
+            "POST", f"/repos/{fork}/git/commits", access_token,
+            {"message": title, "tree": tree["sha"], "parents": [base["sha"]]},
+        )
+        github.request("PATCH", f"/repos/{fork}/git/refs/heads/{branch}", access_token, {"sha": commit["sha"]})
+        pull = github.request(
+            "POST", f"/repos/{upstream}/pulls", access_token,
+            {"title": title, "head": f"{login}:{branch}", "base": base["branch"], "body": body, "maintainer_can_modify": True},
+        )
+    except (urllib.error.URLError, TimeoutError):
+        try:
+            github.request("DELETE", f"/repos/{fork}/git/refs/heads/{branch}", access_token)
+        except (urllib.error.URLError, TimeoutError):
+            pass
+        raise
+    return pull["html_url"]
 
 
 def write(path, text):
@@ -290,6 +361,19 @@ def edit_entry(text, whoami, changes, authors=None):
     return updated, "\n".join(shown)
 
 
+def pull_request_body(action, whoami, name, repository, added):
+    verb = "Registers" if action == "register" else "Updates the entry of"
+    return "\n".join([
+        f"{verb} `{name}` with `WhoAmI` {whoami}, from {repository}.",
+        "",
+        "```yaml",
+        added,
+        "```",
+        "",
+        "Opened with the registration script.",
+    ])
+
+
 def show_changes(text, whoami, entry, current_owner, changes):
     if not changes:
         print(f"The entry of {whoami} {entry.get('name')} is up to date")
@@ -320,26 +404,28 @@ def main():
         "--edit", action="store_true", help="change the owner or remove the home page of a registered device"
     )
     parser.add_argument("--output", help="the folder of a clone of the registry repository to write the updated files to")
-    parser.add_argument("--registry", default=REGISTRY_URL, help="the address or path of the registry to update")
-    parser.add_argument("--schema", default=SCHEMA_URL, help="the address or path of the registry schema")
+    parser.add_argument("--submit", action="store_true", help="open a pull request without asking")
+    parser.add_argument("--no-open", action="store_true", help="do not open the pull request in the browser")
+    parser.add_argument("--upstream", default=UPSTREAM, help="the registry repository, as owner and name")
     args = parser.parse_args()
 
     whoami, name = read_device()
     repository = read_repository()
+    access_token = github.token()
+    if not access_token:
+        fail("repositories cannot be checked without a GitHub token, so set GITHUB_TOKEN or sign in with the GitHub CLI")
     try:
-        text = read(args.registry)
-        schema = json.loads(read(args.schema))
-    except (OSError, urllib.error.URLError) as error:
-        fail(f"the registry could not be read ({getattr(error, 'reason', error)})")
+        base = read_upstream(args.upstream, access_token)
+    except (urllib.error.URLError, TimeoutError) as error:
+        fail(f"the registry could not be read from {args.upstream} ({api_error(error)})")
+    text = base["files"][REGISTRY_FILE]
+    schema = json.loads(base["files"][SCHEMA_FILE])
     registry = yaml.safe_load(text) or {}
     owners, devices = registry.get("owners") or {}, registry.get("devices") or {}
     for key, entry in devices.items():
         if key != whoami and str(entry.get("name", "")).lower() == name.lower():
             fail(f"the name {name} is already registered to WhoAmI {key}")
 
-    access_token = github.token()
-    if not access_token:
-        fail("repositories cannot be checked without a GitHub token, so set GITHUB_TOKEN or sign in with the GitHub CLI")
     try:
         result = github.query([repository], [], access_token)[repository]
     except (urllib.error.URLError, TimeoutError, RuntimeError) as error:
@@ -432,11 +518,32 @@ def main():
         for path in (folder / REGISTRY_FILE, folder / MODULE_FILE):
             if not path.exists():
                 fail(f"no {path}, so specify the folder of a clone of the registry repository")
-        if interactive() and not ask(questionary.confirm(f"Write the updated registry to {folder}?")):
-            return
-        write(folder / REGISTRY_FILE, updated)
-        write(folder / MODULE_FILE, module)
-        print(f"Updated {folder / REGISTRY_FILE} and regenerated {folder / MODULE_FILE}")
+        if not interactive() or ask(questionary.confirm(f"Write the updated registry to {folder}?")):
+            write(folder / REGISTRY_FILE, updated)
+            write(folder / MODULE_FILE, module)
+            print(f"Updated {folder / REGISTRY_FILE} and regenerated {folder / MODULE_FILE}")
+
+    if not args.submit and not interactive():
+        return
+    try:
+        login = github.request("GET", "/user", access_token)["login"]
+        existing = open_pull_requests(args.upstream, login, whoami, access_token)
+    except (urllib.error.URLError, TimeoutError) as error:
+        fail(f"the pull requests on {args.upstream} could not be read ({api_error(error)})")
+    for url in existing:
+        print(f"You already have an open pull request for {whoami}: {url}")
+    prompt = f"Open a pull request on {args.upstream} as {login}?"
+    if not args.submit and not ask(questionary.confirm(prompt, default=False)):
+        return
+    title = f"{'Register' if action == 'register' else 'Update'} {whoami} {name}"
+    body = pull_request_body(action, whoami, name, repository, added)
+    try:
+        url = submit(args.upstream, base, login, whoami, {REGISTRY_FILE: updated, MODULE_FILE: module}, title, body, access_token)
+    except (urllib.error.URLError, TimeoutError) as error:
+        fail(f"the pull request could not be opened ({api_error(error)})")
+    print(f"Opened {url}")
+    if not args.no_open:
+        webbrowser.open(url)
 
 
 if __name__ == "__main__":

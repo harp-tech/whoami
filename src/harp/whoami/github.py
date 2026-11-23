@@ -4,6 +4,7 @@ import subprocess
 import urllib.error
 import urllib.request
 from http import HTTPStatus
+from typing import Any
 from urllib.parse import urlparse
 
 API_URL = "https://api.github.com"
@@ -75,15 +76,28 @@ def query(repositories, files, access_token):
     return found
 
 
+def request(method, path, access_token, body=None, raw=False) -> Any:
+    """Sends a request to the GitHub REST API and returns the decoded response, or its text if raw is set."""
+    data = json.dumps(body).encode() if body is not None else None
+    headers = {
+        **HEADERS,
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/vnd.github.raw" if raw else "application/vnd.github+json",
+    }
+    if data is not None:
+        headers["Content-Type"] = "application/json"
+    message = urllib.request.Request(f"{API_URL}{path}", data=data, method=method, headers=headers)
+    with urllib.request.urlopen(message, timeout=TIMEOUT) as response:
+        payload = response.read().decode("utf-8")
+    if raw:
+        return payload
+    return json.loads(payload) if payload else None
+
+
 def pages_url(repository, access_token):
     """Returns the address of the GitHub Pages site of a repository, or None if it has none."""
-    request = urllib.request.Request(
-        f"{API_URL}/repos/{repository_path(repository)}/pages",
-        headers={**HEADERS, "Authorization": f"Bearer {access_token}", "Accept": "application/vnd.github+json"},
-    )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
-            return json.load(response).get("html_url")
+        return request("GET", f"/repos/{repository_path(repository)}/pages", access_token).get("html_url")
     except urllib.error.HTTPError as error:
         if error.code == HTTPStatus.NOT_FOUND:
             return None
