@@ -1,0 +1,254 @@
+name: harp-whoami
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Release the package, the registration script and the documentation if the package changed?"
+        type: boolean
+        default: false
+      publish-documentation:
+        description: "Publish the documentation of the latest release to GitHub Pages?"
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ inputs.release && 'release' || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  validate-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Needed to find changed entries
+          fetch-depth: 0
+
+      - name: Annotate errors and warnings
+        run: echo "::add-matcher::.github/workflows/problem-matcher.json"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Validate the WhoAmI registry
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run harp-whoami validate ./whoami.yml ./whoami.json --base origin/${{ github.base_ref || 'main' }}
+
+      - name: Generate the WhoAmI registry module
+        run: uv run harp-whoami generate
+
+      - name: Verify pre-generated code was up-to-date
+        run: |
+          git add . --intent-to-add --ignore-removal
+          git diff --name-status --exit-code
+
+  build-package:
+    needs: validate-registry
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Annotate errors and warnings
+        run: echo "::add-matcher::.github/workflows/problem-matcher.json"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Find the package version
+        id: version
+        if: inputs.release && github.ref == 'refs/heads/main'
+        run: |
+          version=$(uv run --group release .github/workflows/package-version.py)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build package
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ steps.version.outputs.version }}
+        run: uv build
+
+      - name: Verify setuptools-scm applied the build version
+        shell: bash
+        run: |
+          ls -1 dist/
+          if ls dist/*-0.0.0.tar.gz >/dev/null 2>&1; then
+            echo "::error::Built version 0.0.0, so setuptools-scm did not apply the build version. Check that pyproject.toml still declares a tool.setuptools_scm table."
+            exit 1
+          fi
+
+      - name: Pin the registration script to the package version
+        if: steps.version.outputs.version != ''
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          mkdir -p artifacts/script
+          sed "s/\"harp-whoami\[registration\]\"/\"harp-whoami[registration]==$VERSION\"/" register.py > artifacts/script/register.py
+          grep -q "\"harp-whoami\[registration\]==$VERSION\"" artifacts/script/register.py
+
+      - name: Collect package artifact
+        if: steps.version.outputs.version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: dist/
+
+      - name: Collect script artifact
+        if: steps.version.outputs.version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: script
+          path: artifacts/script/
+
+  find-release:
+    if: inputs.publish-documentation && !inputs.release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Find the latest release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release view --repo ${{ github.repository }} --json tagName --jq .tagName)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  build-documentation:
+    needs: [build-package, find-release]
+    if: ${{ !cancelled() && !failure() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.find-release.outputs.tag }}
+          submodules: recursive
+
+      - name: Annotate errors and warnings
+        run: echo "::add-matcher::.github/workflows/problem-matcher.json"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Generate the WhoAmI table
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          uv run --group docs .github/workflows/gen-whoami-table.py ./whoami.yml ./artifacts/docs/whoami.md
+
+      - name: Download script artifact
+        if: needs.build-package.outputs.version != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: script
+          path: artifacts/docs/
+
+      - name: Download the registration script of the latest release
+        if: needs.find-release.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download "${{ needs.find-release.outputs.tag }}" --repo ${{ github.repository }} --pattern register.py --dir artifacts/docs
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.x
+
+      - name: Set up .NET tools
+        run: dotnet tool restore
+
+      - name: Build documentation
+        run: dotnet docfx build docs/docfx.json
+
+      - name: Collect documentation website artifact
+        if: needs.build-package.outputs.version != '' || needs.find-release.outputs.tag != ''
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: artifacts/docs/site/
+
+  publish-package:
+    needs: [build-package, build-documentation]
+    if: needs.build-package.outputs.version != ''
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # uv publish exchanges this token with PyPI trusted publishing.
+      id-token: write
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Publish to PyPI
+        run: uv publish
+
+  release-package:
+    needs: [build-package, build-documentation, publish-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist/
+
+      - name: Download script artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: script
+          path: script/
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build-package.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* script/register.py --repo ${{ github.repository }} --target ${{ github.sha }} --title "harp-whoami $VERSION" --generate-notes
+
+  publish-documentation:
+    needs: [build-package, find-release, build-documentation, release-package]
+    if: |
+      !cancelled() && !failure() && needs.build-documentation.result == 'success'
+      && (needs.release-package.result == 'success' || needs.find-release.outputs.tag != '')
+    runs-on: ubuntu-latest
+    concurrency:
+      # Pages refuses a deployment while another is in progress
+      group: publish-documentation
+      cancel-in-progress: false
+    permissions:
+      # Both required by actions/deploy-pages
+      pages: write
+      id-token: write
+    environment:
+      name: documentation-website
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - name: Publish to GitHub Pages
+        id: publish
+        uses: actions/deploy-pages@v5

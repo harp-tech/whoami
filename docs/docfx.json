@@ -18,7 +18,12 @@
         "src": "..",
         "files": [
           "whoami.yml",
-          "whoami.json",
+          "whoami.json"
+        ]
+      },
+      {
+        "src": "../artifacts/docs",
+        "files": [
           "register.py"
         ]
       }
