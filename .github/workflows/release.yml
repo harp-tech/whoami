@@ -1,0 +1,109 @@
+name: "Release the WhoAmI package"
+
+on:
+  schedule:
+    - cron: '20 0 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: release-package
+  cancel-in-progress: false
+
+jobs:
+  check-package:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Annotate errors and warnings
+        run: echo "::add-matcher::.github/workflows/problem-matcher.json"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Find the package version
+        id: version
+        run: |
+          version=$(uv run .github/workflows/package-version.py)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build-package:
+    needs: check-package
+    if: needs.check-package.outputs.version != ''
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Build package
+        env:
+          SETUPTOOLS_SCM_PRETEND_VERSION: ${{ needs.check-package.outputs.version }}
+        run: uv build
+
+      - name: Verify setuptools-scm applied the build version
+        shell: bash
+        run: |
+          ls -1 dist/
+          if ls dist/*-0.0.0.tar.gz >/dev/null 2>&1; then
+            echo "::error::Built version 0.0.0, so setuptools-scm did not apply the build version. Check that pyproject.toml still declares a tool.setuptools_scm table."
+            exit 1
+          fi
+
+      - name: Collect package artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: package
+          path: dist/
+
+  publish-package:
+    needs: build-package
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      # uv publish exchanges this token with PyPI trusted publishing.
+      id-token: write
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Publish to PyPI
+        run: uv publish
+
+  release-package:
+    needs: [check-package, publish-package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download package artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: package
+          path: dist/
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check-package.outputs.version }}
+        run: |
+          gh release create "v$VERSION" dist/* --repo ${{ github.repository }} --target ${{ github.sha }} --title "harp-whoami $VERSION" --generate-notes

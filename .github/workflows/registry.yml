@@ -98,3 +98,33 @@ jobs:
       - name: Publish to GitHub Pages
         id: publish
         uses: actions/deploy-pages@v5
+
+  build-package:
+    needs: validate-registry
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Annotate errors and warnings
+        run: echo "::add-matcher::.github/workflows/problem-matcher.json"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v9.0.0
+        with:
+          enable-cache: true
+
+      - name: Build package
+        run: uv build
+
+  enable-release:
+    needs: build-package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Enable the daily release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PUT repos/${{ github.repository }}/actions/workflows/release.yml/enable
