@@ -2,6 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = [
 #     "harp-whoami[registration]",
+#     "questionary",
 # ]
 # ///
 
@@ -15,6 +16,7 @@ import urllib.request
 from pathlib import Path
 from typing import NoReturn
 
+import questionary
 import yaml
 
 from harp.whoami import github
@@ -30,6 +32,7 @@ REMOTE_PATTERN = re.compile(r"^(?:https://|ssh://git@|git@)github\.com[/:](?P<pa
 OWNER_PATTERN = re.compile(r"^[a-z][a-z0-9-]*$")
 DEVICE_KEY = re.compile(r"^  (\d+):\s*$")
 OWNER_KEY = re.compile(r"^  ([a-z][a-z0-9-]*): &")
+NEW_OWNER = "+"
 
 
 def fail(message) -> NoReturn:
@@ -74,21 +77,57 @@ def read_repository():
     return f"https://github.com/{match['path']}"
 
 
+def interactive():
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def ask(question):
+    answer = question.ask()
+    if answer is None:
+        fail("the registration was cancelled")
+    return answer
+
+
+def check_authors(text):
+    return bool(text.strip()) or "Enter the name to show as the owner"
+
+
+def check_owner_key(owners):
+    def check(text):
+        if text in owners:
+            return f"{text} is already an owner"
+        if not OWNER_PATTERN.match(text):
+            return "Use lowercase letters, digits and hyphens, starting with a letter"
+        return True
+
+    return check
+
+
+def ask_authors(owner=None):
+    if not interactive():
+        fail("a new owner needs --authors when the script does not run in a terminal")
+    prompt = f"Name shown as the owner {owner}" if owner else "Name shown as the owner"
+    return ask(questionary.text(prompt, validate=check_authors)).strip()
+
+
 def choose_owner(owners, owner, authors):
     if owner is None:
-        print("Owners:")
-        for key, value in owners.items():
-            print(f"  {key}: {value.get('authors')}")
-        owner = input("Choose an owner, or enter a new key to add one: ").strip()
+        if not interactive():
+            fail("specify --owner when the script does not run in a terminal")
+        choices = [questionary.Choice(f"{value.get('authors')} ({key})", value=key) for key, value in owners.items()]
+        choices += [questionary.Separator(), questionary.Choice("Add a new owner", value=NEW_OWNER)]
+        owner = ask(questionary.select("Owner of the device", choices=choices))
+        if owner != NEW_OWNER:
+            return owner, None
+        authors = ask_authors()
+        default = re.sub(r"[^a-z0-9]", "", authors.lower())
+        owner = ask(questionary.text("Key of the new owner", default=default, validate=check_owner_key(owners)))
+        return owner, authors
     if owner in owners:
         return owner, None
     if not OWNER_PATTERN.match(owner):
         fail(f"the owner key {owner} must be lowercase letters, digits and hyphens")
-    if authors is None:
-        authors = input(f"Enter the name shown as the owner for {owner}: ").strip()
-    if not authors:
-        fail("a new owner needs a name to show as the owner")
-    return owner, authors
+    return owner, authors if authors else ask_authors(owner)
 
 
 def section_end(lines, start):
@@ -169,6 +208,7 @@ def main():
     if result is None:
         fail(f"{repository} is not public or does not exist")
     repository = result["url"]
+    print(f"Registering {whoami} {name} from {repository}")
 
     owner, authors = choose_owner(owners, args.owner, args.authors)
     updated, added = add_entry(text, whoami, name, repository, owner, authors)
@@ -189,17 +229,18 @@ def main():
     except ValueError as error:
         fail(f"the registry module could not be generated ({error})")
 
+    print(f"{whoami} {name} is ready to register:")
+    print(added)
     if args.output:
         folder = Path(args.output)
         for path in (folder / REGISTRY_FILE, folder / MODULE_FILE):
             if not path.exists():
                 fail(f"no {path}, so specify the folder of a clone of the registry repository")
+        if interactive() and not ask(questionary.confirm(f"Write the updated registry to {folder}?")):
+            return
         write(folder / REGISTRY_FILE, updated)
         write(folder / MODULE_FILE, module)
         print(f"Added {whoami} {name} to {folder / REGISTRY_FILE} and regenerated {folder / MODULE_FILE}")
-    else:
-        print(f"{whoami} {name} is ready to register:")
-        print(added)
 
 
 if __name__ == "__main__":
