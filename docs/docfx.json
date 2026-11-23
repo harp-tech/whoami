@@ -18,7 +18,8 @@
         "src": "..",
         "files": [
           "whoami.yml",
-          "whoami.json"
+          "whoami.json",
+          "register.py"
         ]
       }
     ],
@@ -35,7 +36,7 @@
       "_navRel": "../toc.html",
       "_tocRel": "../build/toc.html"
     },
-    "dest": "_site",
+    "output": "../artifacts/docs/site/",
     "template": [
       "default",
       "modern",

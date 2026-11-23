@@ -11,7 +11,7 @@ try {
         Remove-Item "..\artifacts\docs\*" -Recurse -Force
     }
 
-    uv run ..\.github\workflows\gen-whoami-table.py ..\whoami.yml ..\artifacts\docs\whoami.md
+    uv run --group docs ..\.github\workflows\gen-whoami-table.py ..\whoami.yml ..\artifacts\docs\whoami.md
     dotnet docfx build $docfxArgs
 } finally {
     Pop-Location

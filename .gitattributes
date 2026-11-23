@@ -1,0 +1,8 @@
+* text=auto
+
+# Language diffs
+*.md diff=markdown
+*.py diff=python
+
+# Known formats
+registry.py linguist-generated=true

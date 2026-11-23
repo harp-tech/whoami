@@ -10,6 +10,7 @@ To reserve a `WhoAmI` please submit a Pull Request adding the device to the `who
 - Declare an owner, as described in the next section
 - Have a PascalCase name that no other device uses
 - Declare a public GitHub repository with a `device.yml` at its root, whose `whoAmI` and name match the entry
+- Update the generated registry module by running `uv run harp-whoami generate` at the root of this repository
 
 These requirements are checked automatically on every Pull Request.
 

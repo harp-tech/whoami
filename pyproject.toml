@@ -1,0 +1,46 @@
+[project]
+name = "harp-whoami"
+dynamic = ["version"]
+description = "The registry of WhoAmI identifiers reserved for Harp devices"
+authors = [{ name = "harp-tech", email = "contact@harp-tech.org" }]
+license = "MIT"
+license-files = ["LICENSE.md"]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.11.2",
+]
+
+[project.optional-dependencies]
+registration = [
+    "jsonschema>=4",
+    "pyyaml>=6",
+]
+
+[project.scripts]
+harp-whoami = "harp.whoami.cli:main"
+
+[project.urls]
+Homepage = "https://harp-tech.org/whoami/"
+Repository = "https://github.com/harp-tech/whoami/"
+"Bug Tracker" = "https://github.com/harp-tech/whoami/issues"
+
+[dependency-groups]
+dev = [
+    "harp-whoami[registration]",
+]
+docs = [
+    "pandas>=3",
+    "pyyaml>=6",
+    "tabulate>=0.9",
+]
+
+[build-system]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["harp*"]

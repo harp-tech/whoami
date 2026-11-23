@@ -10,11 +10,13 @@ TIMEOUT = 20
 
 
 def repository_path(url):
+    """Returns the owner and name of a GitHub repository from its address, or None for other hosts."""
     parsed = urlparse(url)
     return parsed.path.strip("/") if parsed.hostname == "github.com" else None
 
 
 def token():
+    """Returns the GitHub token from GITHUB_TOKEN or the GitHub CLI, or None if neither has one."""
     value = os.environ.get("GITHUB_TOKEN")
     if value:
         return value
